@@ -112,6 +112,7 @@ function getDocgenTypeHelper(
   parentIds: number[] = [],
   isRequired = false,
 ): any {
+  log('type', type.flags, type.value);
   function isTuple(_type: ts.Type) {
     // @ts-ignore use internal methods
     return checker.isArrayLikeType(_type) && !checker.isArrayType(_type);
@@ -124,18 +125,19 @@ function getDocgenTypeHelper(
   }
 
   function makeResult(typeInfo: Json) {
-    if (skipRequired) {
-      return {
-        raw: checker.typeToString(type),
-        ...typeInfo,
-      };
-    } else {
-      return {
-        required,
-        raw: checker.typeToString(type),
-        ...typeInfo,
-      };
-    }
+    log('typeInfo', typeInfo);
+      if (skipRequired) {
+        return {
+          raw: checker.typeToString(type),
+          ...typeInfo,
+        };
+      } else {
+        return {
+          required,
+          raw: checker.typeToString(type),
+          ...typeInfo,
+        };
+      }
   }
 
   function getShapeFromArray(symbolArr: ts.Symbol[], _type: ts.Type) {
@@ -269,17 +271,30 @@ function getDocgenTypeHelper(
       name: 'string',
     });
   } else if (type.flags & TypeFlags.NumberLiteral) {
+    log('literal type1', type.flags, type.value);
     return makeResult({
       name: 'literal',
       // @ts-ignore
       value: type.value,
     });
   } else if (type.flags & TypeFlags.Literal) {
+    // type.flags=1152 && type.value='bscm'
+    log('literal type2', type.flags, type.value);
+    if (type.flags === 1152 && typeof type.value === 'string') {
+      return makeResult({
+        name: 'literal',
+        value: type.value,
+        raw: type.value,
+      });
+    }
     return makeResult({
       name: 'literal',
       value: checker.typeToString(type),
     });
   } else if (type.symbol?.flags & SymbolFlags.Enum) {
+    // 为什么没走到这？
+    // type.flags=1049600 且 type.symbol.flags=256 value=['testA', 'testB']
+    log('union2', type.flags, type.symbol?.flags, type.types.map((t) => t.value));
     return makeResult({
       name: 'union',
       // @ts-ignore
@@ -295,11 +310,12 @@ function getDocgenTypeHelper(
       name: 'any',
     });
   } else if (type.flags & TypeFlags.Union && !isComplexType(type)) {
+    // type.flags=1048576
+    log('union type', type.types.map((t) => getDocgenTypeHelper(checker, t, true, getNextParentIds(parentIds, type))));
     return makeResult({
       name: 'union',
       // @ts-ignore
-      value: type.types.map((t) =>
-        getDocgenTypeHelper(checker, t, true, getNextParentIds(parentIds, type))),
+      value: type.types.map((t) => getDocgenTypeHelper(checker, t, true, getNextParentIds(parentIds, type))),
     });
   } else if (isComplexType(type)) {
     return makeResult({
@@ -402,7 +418,7 @@ class MyParser extends Parser {
   }
 
   // override the builtin method, to avoid the false positive
-  public extractPropsFromTypeIfStatelessComponent(type: ts.Type): ts.Symbol | null {
+  extractPropsFromTypeIfStatelessComponent(type: ts.Type): ts.Symbol | null {
     const callSignatures = type.getCallSignatures();
 
     if (callSignatures.length) {
@@ -479,7 +495,7 @@ const defaultTsConfigPath = path.resolve(__dirname, './tsconfig.json');
 export default function parseTS(filePath: string, args: IParseArgs): ComponentDoc[] {
   if (!filePath) return [];
 
-  let basePath = args.moduleDir || args.workDir || path.dirname(filePath);
+  let basePath = path.dirname(filePath);
   let tsConfigPath = findConfig('tsconfig.json', { cwd: basePath }); // path.resolve(basePath, 'tsconfig.json')
   if (
     !tsConfigPath ||
@@ -492,8 +508,7 @@ export default function parseTS(filePath: string, args: IParseArgs): ComponentDo
   }
 
   log('ts config path is', tsConfigPath);
-  const { config, error } = ts.readConfigFile(tsConfigPath, (filename) =>
-    readFileSync(filename, 'utf8'));
+  const { config, error } = ts.readConfigFile(tsConfigPath, (filename) => readFileSync(filename, 'utf8'));
 
   if (error !== undefined) {
     const errorText = `Cannot load custom tsconfig.json from provided path: ${tsConfigPath}, with error code: ${error.code}, message: ${error.messageText}`;
@@ -547,6 +562,7 @@ export default function parseTS(filePath: string, args: IParseArgs): ComponentDo
           continue;
         }
         const info = parser.getComponentInfo(sym, sourceFile);
+        // log('result of parser', JSON.stringify(info, null, 2));
         if (info === null) {
           continue;
         }

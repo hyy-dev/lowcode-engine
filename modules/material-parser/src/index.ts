@@ -7,7 +7,7 @@ import {
   IMaterializeOnlineOptions,
   IInternalMaterializeOptions,
 } from './types';
-import { ComponentMeta } from './core';
+import { ComponentMeta, enableDebug } from './core';
 import scan from './scan';
 import generate from './generate';
 import parse from './parse';
@@ -68,3 +68,5 @@ export default async function (options: IMaterializeOptions): Promise<ComponentM
   }
   return result;
 }
+
+// enableDebug();

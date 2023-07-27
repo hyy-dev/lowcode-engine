@@ -5,7 +5,8 @@ import { debug } from '../core';
 const log = debug.extend('parse:transform');
 
 export function transformType(itemType: any) {
-  if (typeof itemType === 'string') return itemType;
+  log('itemType', itemType);
+  if (typeof itemType === 'string' || typeof itemType === 'number') return itemType;
   const {
     name,
     elements,
